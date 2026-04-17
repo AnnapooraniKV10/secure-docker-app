@@ -1,0 +1,39 @@
+name: Secure CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-and-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 18
+
+    - name: Install dependencies
+      run: npm install
+
+    # 🔐 Static code analysis
+    - name: Run ESLint
+      run: npx eslint . || true
+
+    # 🔐 Dependency scan
+    - name: Run npm audit
+      run: npm audit --audit-level=high || true
+
+    # 🐳 Build Docker image
+    - name: Build Docker image
+      run: docker build -t devops-app .
+
+    # 🔍 Scan Docker image (Trivy)
+    - name: Scan Docker image
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: devops-app
