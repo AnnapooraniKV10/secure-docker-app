@@ -2,38 +2,63 @@ name: Secure CI/CD Pipeline
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
-  build-and-scan:
+  build-scan-push:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      # 1. Checkout
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: 18
+      # 2. Node setup
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
 
-    - name: Install dependencies
-      run: npm install
+      # 3. Install deps
+      - name: Install dependencies
+        run: npm install
 
-    # 🔐 Static code analysis
-    - name: Run ESLint
-      run: npx eslint . || true
+      # 4. Lint (SAST)
+      - name: Run ESLint
+        run: npx eslint . || true
 
-    # 🔐 Dependency scan
-    - name: Run npm audit
-      run: npm audit --audit-level=high || true
+      # 5. Dependency scan
+      - name: Run npm audit
+        run: npm audit --audit-level=high || true
 
-    # 🐳 Build Docker image
-    - name: Build Docker image
-      run: docker build -t devops-app .
+      # 6. Build Docker image
+      - name: Build Docker image
+        run: docker build -t devops-app .
 
-    # 🔍 Scan Docker image (Trivy)
-    - name: Scan Docker image
-      uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: devops-app
+      # 7. Scan image (Trivy)
+      - name: Scan Docker image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: devops-app
+
+      # 8. Configure AWS
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # 9. Login to ECR
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 10. Tag image
+      - name: Tag Docker image
+        run: |
+          docker tag devops-app:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/devops-secure-docker:latest
+
+      # 11. Push image
+      - name: Push Docker image
+        run: |
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/devops-secure-docker:latest
